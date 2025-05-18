@@ -1,0 +1,20 @@
+//@version=5
+indicator("Chattes-Grid-Pivot", overlay=true)
+
+gridPips = input.int(20, "Grid Spacing (Pips)", minval=1)
+pivotLookback = input.int(20, "Pivot Lookback", minval=2)
+
+pipSize = gridPips * syminfo.mintick * 10
+
+// Static anchor using pivot low (you can also use pivotHigh)
+pivotHigh = ta.highest(high, pivotLookback)
+pivotLow = ta.lowest(low, pivotLookback)
+anchor = pivotLow
+
+linesAbove = 20
+linesBelow = 20
+
+for i = -linesBelow to linesAbove
+    var float level = na
+    level := anchor + i * pipSize
+    line.new(x1=na, y1=level, x2=na, y2=level, xloc=xloc.bar_index, extend=extend.both, color=color.gray, style=line.style_dashed, width=1)

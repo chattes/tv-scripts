@@ -1,0 +1,109 @@
+//@version=5
+indicator('Chattes-SwingCount', 'Chattes-Swing Count', overlay=true)
+
+// === Inputs ===
+Depth = input.int(12, 'Depth', minval=1, step=1)
+Deviation = input.int(5, 'Deviation', minval=1, step=1)
+Backstep = input.int(2, 'Backstep', minval=2, step=1)
+swing_count = input.int(20, "Avg/StdDev over Last N Swings", minval=1, maxval=100)
+
+// === ZigZag Function ===
+zigzag(float _low, float _high, int depth, int deviation, int backstep) =>
+    hr = ta.barssince(not (_high[-ta.highestbars(depth)] - _high > deviation * syminfo.mintick)[1])
+    lr = ta.barssince(not (_low - _low[-ta.lowestbars(depth)] > deviation * syminfo.mintick)[1])
+    direction = ta.barssince(not (hr > lr)) >= backstep ? -1 : 1
+
+    var chart.point z = chart.point.now(_low)
+    var chart.point z1 = chart.point.now(_low)
+    var chart.point z2 = chart.point.now(_high)
+    var int z1BarIndex = na
+    var int z2BarIndex = na
+
+    if ta.change(direction)
+        z1 := z2.copy()
+        z1BarIndex := z2BarIndex
+        z2 := z.copy()
+        z2BarIndex := bar_index
+
+    if direction > 0
+        if _high > z2.price
+            z2 := chart.point.now(_high)
+            z2BarIndex := bar_index
+            z := chart.point.now(_low)
+        if _low < z.price
+            z := chart.point.now(_low)
+
+    if direction < 0
+        if _low < z2.price
+            z2 := chart.point.now(_low)
+            z2BarIndex := bar_index
+            z := chart.point.now(_high)
+        if _high > z.price
+            z := chart.point.now(_high)
+
+    [direction, z1, z2, z1BarIndex, z2BarIndex]
+
+[direction, z1, z2, z1BarIndex, z2BarIndex] = zigzag(low, high, Depth, Deviation, Backstep)
+
+var float lastPrice = na
+var int lastBarIndex = na
+var int candleCount = na
+var float pipDifference = na
+
+var float[] pipArray = array.new_float()
+var int[] candleArray = array.new_int()
+
+if not na(z2.price) and not na(z1.price)
+    pipDifference := math.abs(z2.price - z1.price) / syminfo.mintick
+    candleCount := not na(lastBarIndex) ? (z2BarIndex - lastBarIndex) : 0
+    lastPrice := z1.price
+    lastBarIndex := z1BarIndex
+
+    array.push(pipArray, pipDifference)
+    array.push(candleArray, candleCount)
+    if array.size(pipArray) > swing_count
+        array.shift(pipArray)
+    if array.size(candleArray) > swing_count
+        array.shift(candleArray)
+
+float sumPips = 0
+int sumCandles = 0
+for i = 0 to array.size(pipArray) - 1
+    sumPips += array.get(pipArray, i)
+    sumCandles += array.get(candleArray, i)
+
+float avgPips = array.size(pipArray) > 0 ? sumPips / array.size(pipArray) : na
+float avgCandles = array.size(candleArray) > 0 ? sumCandles / array.size(candleArray) : na
+
+float pipDevSum = 0
+float candleDevSum = 0
+for i = 0 to array.size(pipArray) - 1
+    pipDevSum += math.pow(array.get(pipArray, i) - avgPips, 2)
+    candleDevSum += math.pow(array.get(candleArray, i) - avgCandles, 2)
+
+float stdDevPips = array.size(pipArray) > 1 ? math.sqrt(pipDevSum / array.size(pipArray)) : na
+float stdDevCandles = array.size(candleArray) > 1 ? math.sqrt(candleDevSum / array.size(candleArray)) : na
+
+isUnusual = not na(pipDifference) and not na(avgPips) and not na(stdDevPips) and pipDifference > (avgPips + stdDevPips * 1.5)
+
+// === Top Right Stats Box Only ===
+var label statsBox = na
+topY = ta.highest(high, 100)
+if na(statsBox)
+    statsBox := label.new(x=bar_index + 20, y=topY, text="", xloc=xloc.bar_index, yloc=yloc.price, style=label.style_label_right, size=size.large, color=color.new(color.black, 20), textcolor=color.white)
+
+if not na(avgPips)
+    label.set_xy(statsBox, bar_index + 20, topY)
+    string line1 = "\ud83d\udcca ZigZag Stats"
+    string line2 = "Avg Pips: " + str.tostring(avgPips / 10, "#.##")
+    string line3 = "StdDev Pips: " + str.tostring(stdDevPips / 10, "#.##")
+    string line4 = "Avg Bars: " + str.tostring(avgCandles, "#.##")
+    string line5 = "StdDev Bars: " + str.tostring(stdDevCandles, "#.##")
+    string boxText = line1 + "\n" + line2 + "\n" + line3 + "\n" + line4 + "\n" + line5
+    label.set_text(statsBox, boxText)
+
+// === Alert Conditions ===
+alertcondition(isUnusual, title="Unusual Swing Detected", message="\u26a0\ufe0f Unusual ZigZag swing on {{ticker}} at {{time}} — exceeds 1.5x StdDev")
+if isUnusual
+    alert("Unusual ZigZag swing detected", alert.freq_once_per_bar)
+
