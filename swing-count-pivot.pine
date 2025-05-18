@@ -88,12 +88,12 @@ isUnusual = not na(pipDifference) and not na(avgPips) and not na(stdDevPips) and
 
 // === Top Right Stats Box Only ===
 var label statsBox = na
-topY = ta.highest(high, 100)
 if na(statsBox)
-    statsBox := label.new(x=bar_index + 20, y=topY, text="", xloc=xloc.bar_index, yloc=yloc.price, style=label.style_label_right, size=size.large, color=color.new(color.black, 20), textcolor=color.white)
+    statsBox := label.new(x=bar_index, y=0, text="", xloc=xloc.bar_index, yloc=yloc.abovebar, style=label.style_label_right, size=size.small, color=color.new(color.black, 20), textcolor=color.white)
 
 if not na(avgPips)
-    label.set_xy(statsBox, bar_index + 20, topY)
+    // Keep the label at the right edge of the chart
+    label.set_x(statsBox, bar_index)
     string line1 = "\ud83d\udcca ZigZag Stats"
     string line2 = "Avg Pips: " + str.tostring(avgPips / 10, "#.##")
     string line3 = "StdDev Pips: " + str.tostring(stdDevPips / 10, "#.##")
